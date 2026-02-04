@@ -1,257 +1,312 @@
 
-import React, { useState, useRef, useMemo, Suspense } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Stars, Line, Sphere, Html, Loader } from '@react-three/drei';
+import React, { useState, useRef, useMemo, Suspense, useEffect } from 'react';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { OrbitControls, Stars, Line, Sphere, Html, Loader, Text } from '@react-three/drei';
 import * as THREE from 'three';
 
-// Constants for simulation
-const REAL_EARTH_MASS_RATIO = 81.3;
-const MOON_MASS_RATIO = 1;
-
-interface SimulationSceneProps {
+// --- Types & Interfaces ---
+interface SimConfig {
+    moonMassMultiplier: number;
+    showLever: boolean;
+    showOrbitTrails: boolean;
+    referenceFrame: 'barycentric' | 'geocentric';
     speed: number;
 }
 
-const SimulationScene: React.FC<SimulationSceneProps> = ({ speed }) => {
+// --- Physics Constants ---
+const BASE_EARTH_MASS = 81.3;
+const BASE_MOON_MASS = 1;
+const ORBIT_DISTANCE = 20; // Scaled down unit for visualization
+const EARTH_RADIUS = 2;
+const MOON_RADIUS = 0.6;
+
+// --- Components ---
+
+const SimulationScene: React.FC<SimConfig> = ({ 
+    moonMassMultiplier, 
+    showLever, 
+    showOrbitTrails, 
+    referenceFrame, 
+    speed 
+}) => {
+    // Refs
     const groupRef = useRef<THREE.Group>(null);
     const earthRef = useRef<THREE.Mesh>(null);
     const moonRef = useRef<THREE.Mesh>(null);
 
-    // Load Textures
+    // Textures
     const [earthMap, moonMap] = useLoader(THREE.TextureLoader, [
         'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg',
         'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg'
     ]);
+
+    // Calculations
+    const currentMoonMass = BASE_MOON_MASS * moonMassMultiplier;
+    const totalMass = BASE_EARTH_MASS + currentMoonMass;
     
-    // Config - Realistic Settings Only
-    const config = useMemo(() => {
-        return {
-            earthSize: 1.5,
-            moonSize: 0.4, 
-            distance: 30, // Reduced radius as requested (was 50)
-            orbitSpeed: 0.5,
-            trailOpacity: 0.2,
-            effectiveMassRatio: REAL_EARTH_MASS_RATIO
-        };
-    }, []);
+    // Distance from Barycenter (0,0,0)
+    // r1 = a * m2 / (m1 + m2)
+    const rEarth = ORBIT_DISTANCE * (currentMoonMass / totalMass);
+    const rMoon = ORBIT_DISTANCE * (BASE_EARTH_MASS / totalMass);
 
-    // Barycenter Calculations
-    // rEarth = Distance from Pivot(0,0,0) to Earth Center
-    const rEarth = config.distance * (MOON_MASS_RATIO / (config.effectiveMassRatio + MOON_MASS_RATIO));
-    // rMoon = Distance from Pivot(0,0,0) to Moon Center
-    const rMoon = config.distance * (config.effectiveMassRatio / (config.effectiveMassRatio + MOON_MASS_RATIO));
+    // Animation State
+    const angleRef = useRef(0);
+    const earthPos = useRef(new THREE.Vector3());
+    const moonPos = useRef(new THREE.Vector3());
 
-    // Animation Loop
     useFrame((state, delta) => {
+        angleRef.current += delta * 0.5 * speed;
+        
+        // Calculate Positions in Barycentric Frame (Center of Mass at 0,0,0)
+        const xE = -Math.cos(angleRef.current) * rEarth;
+        const zE = -Math.sin(angleRef.current) * rEarth;
+        
+        const xM = Math.cos(angleRef.current) * rMoon;
+        const zM = Math.sin(angleRef.current) * rMoon;
+
+        earthPos.current.set(xE, 0, zE);
+        moonPos.current.set(xM, 0, zM);
+
         if (groupRef.current) {
-            // Rotate the whole system around the Barycenter (0,0,0)
-            groupRef.current.rotation.y += delta * config.orbitSpeed * speed;
+            // If Geocentric, we shift the entire world so Earth is at (0,0,0)
+            if (referenceFrame === 'geocentric') {
+                groupRef.current.position.x = -xE;
+                groupRef.current.position.z = -zE;
+            } else {
+                groupRef.current.position.lerp(new THREE.Vector3(0, 0, 0), 0.1);
+            }
         }
+
+        // Apply to meshes
         if (earthRef.current) {
-            // Earth Day Rotation 
-            earthRef.current.rotation.y += delta * 0.5 * speed;
+            earthRef.current.position.copy(earthPos.current);
+            earthRef.current.rotation.y += delta * 0.5;
         }
         if (moonRef.current) {
-             // Moon tidally locked
-             moonRef.current.rotation.y += delta * 0.05 * speed;
+            moonRef.current.position.copy(moonPos.current);
+            moonRef.current.rotation.y += delta * 0.1;
+            // Moon roughly faces earth (tidal lock simulation)
+            moonRef.current.rotation.y = angleRef.current + Math.PI; 
         }
     });
 
-    // Orbital Path Geometries (Traces the center of the bodies)
-    const earthOrbitPoints = useMemo(() => {
-        const points = [];
-        for (let i = 0; i <= 64; i++) {
-            const angle = (i / 64) * Math.PI * 2;
-            points.push(new THREE.Vector3(Math.cos(angle) * rEarth, 0, Math.sin(angle) * rEarth));
-        }
-        return points;
-    }, [rEarth]);
-
-    const moonOrbitPoints = useMemo(() => {
-        const points = [];
-        for (let i = 0; i <= 128; i++) {
-            const angle = (i / 128) * Math.PI * 2;
-            points.push(new THREE.Vector3(Math.cos(angle) * rMoon, 0, Math.sin(angle) * rMoon));
-        }
-        return points;
-    }, [rMoon]);
-
-    const axisPoints = useMemo(() => [new THREE.Vector3(0, -100, 0), new THREE.Vector3(0, 100, 0)], []);
-    const leverPoints = useMemo(() => [new THREE.Vector3(-rEarth, 0, 0), new THREE.Vector3(rMoon, 0, 0)], [rEarth, rMoon]);
-
     return (
-        <group>
-            {/* Barycenter Axis Line - Visualizing the axis of rotation */}
-            <Line points={axisPoints} color="#ef4444" lineWidth={1} dashed dashSize={2} gapSize={2} opacity={0.6} transparent />
-
-            {/* Barycenter Marker (The Pivot) */}
+        <group ref={groupRef}>
+            {/* --- BARYCENTER MARKER (The Pivot) --- */}
             <mesh position={[0, 0, 0]}>
-                <sphereGeometry args={[0.1, 16, 16]} />
+                <sphereGeometry args={[0.3, 16, 16]} />
                 <meshBasicMaterial color="#ef4444" toneMapped={false} />
-                <pointLight color="#ef4444" intensity={2} distance={5} />
-                <Html position={[0.5, 2, 0]} center>
-                    <div className="flex flex-col items-center pointer-events-none select-none">
-                         <div className="text-red-500 font-bold text-[10px] whitespace-nowrap bg-black/80 px-2 py-1 rounded border border-red-500/50">Barycenter</div>
-                         <div className="w-px h-4 bg-red-500/50"></div>
+                <Html position={[0, 0.5, 0]} center zIndexRange={[100, 0]}>
+                    <div className="flex flex-col items-center">
+                        <div className="text-red-500 font-bold text-[10px] bg-black/80 px-2 py-0.5 rounded border border-red-500/50 whitespace-nowrap">
+                            BARYCENTER (Center of Mass)
+                        </div>
+                        <div className="w-0.5 h-4 bg-red-500/50"></div>
                     </div>
                 </Html>
             </mesh>
-            
-            {/* Horizontal Grid Plane for reference */}
-            <gridHelper args={[100, 20, 0x333333, 0x111111]} position={[0, -5, 0]} />
 
-            {/* Static Orbital Paths (Visual Reference) */}
-            <Line points={earthOrbitPoints} color="#3b82f6" opacity={config.trailOpacity} transparent lineWidth={1} />
-            <Line points={moonOrbitPoints} color="#94a3b8" opacity={config.trailOpacity} transparent lineWidth={1} />
-
-            {/* Rotating System Group */}
-            <group ref={groupRef}>
-                
-                {/* Visual Lever Arm connecting centers */}
-                <Line 
-                    points={leverPoints} 
-                    color="#ffffff" 
-                    opacity={0.1} 
-                    transparent 
-                    lineWidth={1} 
+            {/* --- THE LEVER (Visual Balance Beam) --- */}
+            {showLever && (
+                <Line
+                    points={[earthPos.current, moonPos.current]}
+                    color="white"
+                    opacity={0.2}
+                    transparent
+                    lineWidth={1}
                 />
-
-                {/* EARTH */}
-                <group position={[-rEarth, 0, 0]}>
-                    <Sphere ref={earthRef} args={[config.earthSize, 64, 64]}>
-                        <meshStandardMaterial 
-                            map={earthMap}
-                            color="#ffffff" 
-                            roughness={0.5}
-                            metalness={0.1}
-                        />
-                    </Sphere>
-                    {/* Atmosphere Glow Mesh */}
-                    <Sphere args={[config.earthSize * 1.03, 64, 64]}>
-                         <meshStandardMaterial 
-                            color="#60a5fa" 
-                            transparent 
-                            opacity={0.15} 
-                            side={THREE.BackSide} 
-                            blending={THREE.AdditiveBlending} 
-                        />
-                    </Sphere>
-                    
-                    <Html distanceFactor={20} position={[0, config.earthSize + 2, 0]}>
-                         <div className="text-cyan-400 text-[10px] font-bold tracking-widest bg-black/60 px-2 py-1 rounded backdrop-blur-sm border border-cyan-500/30">EARTH</div>
-                    </Html>
+            )}
+            
+            {/* --- ORBIT TRAILS --- */}
+            {showOrbitTrails && (
+                <group rotation={[Math.PI / 2, 0, 0]}>
+                    {/* Earth Trail */}
+                    <mesh rotation={[0, 0, 0]}>
+                        <ringGeometry args={[rEarth - 0.05, rEarth + 0.05, 64]} />
+                        <meshBasicMaterial color="#22d3ee" opacity={0.3} transparent side={THREE.DoubleSide} />
+                    </mesh>
+                    {/* Moon Trail */}
+                    <mesh rotation={[0, 0, 0]}>
+                         <ringGeometry args={[rMoon - 0.05, rMoon + 0.05, 128]} />
+                         <meshBasicMaterial color="#94a3b8" opacity={0.15} transparent side={THREE.DoubleSide} />
+                    </mesh>
                 </group>
+            )}
 
-                {/* MOON */}
-                <group position={[rMoon, 0, 0]}>
-                    <Sphere ref={moonRef} args={[config.moonSize, 32, 32]}>
-                        <meshStandardMaterial 
-                            map={moonMap}
-                            color="#cccccc"
-                            roughness={0.9} 
-                        />
-                    </Sphere>
-                    <Html distanceFactor={20} position={[0, config.moonSize + 1.5, 0]}>
-                         <div className="text-slate-300 text-[10px] font-bold tracking-widest bg-black/60 px-2 py-1 rounded backdrop-blur-sm border border-white/20">MOON</div>
-                    </Html>
-                </group>
-            </group>
+            {/* --- EARTH --- */}
+            <mesh ref={earthRef}>
+                <sphereGeometry args={[EARTH_RADIUS, 32, 32]} />
+                <meshStandardMaterial map={earthMap} roughness={0.5} />
+                <Html position={[0, EARTH_RADIUS + 0.5, 0]} center>
+                    <div className="text-cyan-400 font-bold text-[10px] bg-black/60 px-2 rounded border border-cyan-500/30">
+                        Earth
+                    </div>
+                </Html>
+            </mesh>
+
+            {/* --- MOON --- */}
+            <mesh ref={moonRef}>
+                <sphereGeometry args={[MOON_RADIUS * (1 + (moonMassMultiplier-1)*0.1), 32, 32]} />
+                <meshStandardMaterial map={moonMap} roughness={0.8} color="#cccccc" />
+                <Html position={[0, MOON_RADIUS + 0.5, 0]} center>
+                    <div className="text-slate-300 font-bold text-[10px] bg-black/60 px-2 rounded border border-white/20">
+                        Moon
+                    </div>
+                </Html>
+            </mesh>
         </group>
     );
 };
 
+// Camera Controller to smooth transitions between frames
+const CameraRig: React.FC<{ frame: 'barycentric' | 'geocentric' }> = ({ frame }) => {
+    const { camera, controls } = useThree();
+    const vec = new THREE.Vector3();
+
+    useFrame(() => {
+        // When in geocentric mode, we zoom in slightly closer to emphasize the earth being "still" visually (relative to camera)
+        // In Barycentric, we pull back to see the wobble
+        const targetPos = frame === 'barycentric' 
+            ? vec.set(0, 30, 0) 
+            : vec.set(0, 30, 0); // We actually move the scene, not the camera, so camera stays mostly put but controls target changes
+        
+        // @ts-ignore
+        if (controls) {
+             // @ts-ignore
+             controls.target.lerp(new THREE.Vector3(0,0,0), 0.1);
+        }
+    });
+    return null;
+};
+
 const BarycenterSim: React.FC = () => {
+    // UI State
+    const [moonMassMultiplier, setMoonMassMultiplier] = useState(1);
+    const [referenceFrame, setReferenceFrame] = useState<'barycentric' | 'geocentric'>('barycentric');
+    const [showLever, setShowLever] = useState(true);
     const [speed, setSpeed] = useState(1);
 
     return (
-        <div className="w-full h-full relative bg-slate-950">
-            <Canvas camera={{ position: [0, 50, 50], fov: 45 }} shadows>
-                {/* Sun Light Source */}
-                <directionalLight position={[100, 20, 50]} intensity={2.5} color="#ffffff" castShadow />
-                <ambientLight intensity={0.15} /> 
+        <div className="w-full h-full relative bg-slate-950 font-sans">
+            <Canvas shadows camera={{ position: [0, 40, 40], fov: 35 }}>
+                <color attach="background" args={['#020617']} />
+                <Stars radius={200} depth={50} count={5000} factor={4} fade />
                 
-                <Stars radius={200} depth={50} count={3000} factor={4} fade />
-                
+                <ambientLight intensity={0.2} />
+                <pointLight position={[50, 20, 50]} intensity={2} color="#fff7ed" />
+                <hemisphereLight intensity={0.2} color="#ffffff" groundColor="#000000" />
+
                 <Suspense fallback={null}>
-                    <SimulationScene speed={speed} />
+                    <SimulationScene 
+                        moonMassMultiplier={moonMassMultiplier}
+                        showLever={showLever}
+                        showOrbitTrails={true}
+                        referenceFrame={referenceFrame}
+                        speed={speed}
+                    />
                 </Suspense>
                 
-                <OrbitControls 
-                    enablePan={true}
-                    enableZoom={true}
-                    minDistance={5}
-                    maxDistance={200}
-                />
+                <CameraRig frame={referenceFrame} />
+                <OrbitControls minDistance={10} maxDistance={100} />
             </Canvas>
             <Loader />
 
-            {/* UI Overlay */}
-            <div className="absolute top-6 left-6 flex flex-col gap-4 z-20 pointer-events-none">
-                <div className="glass p-5 rounded-2xl border-white/10 w-80 backdrop-blur-xl pointer-events-auto max-h-[90vh] overflow-y-auto">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
-                        <span className="text-[10px] font-bold text-red-400 tracking-[0.2em] uppercase">BARYCENTER DYNAMICS</span>
-                    </div>
-
-                    <div className="mb-6 space-y-3">
-                        <p className="text-xs text-slate-300 leading-relaxed border-l-2 border-cyan-500 pl-3">
-                            The <b>Barycenter</b> is the common center of mass around which the Earth and Moon orbit.
-                        </p>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Because Earth is much more massive (~81x), the barycenter is located <b>inside the Earth</b>, roughly 1,700km beneath the surface. This causes the Earth to "wobble" slightly rather than orbit in a wide circle.
-                        </p>
-                    </div>
-
-                    <div className="space-y-4 mb-6">
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                            <span className="block text-[10px] text-slate-500 font-bold uppercase mb-2">System Stats</span>
-                            <div className="grid grid-cols-2 gap-y-3 gap-x-2">
-                                <div>
-                                    <span className="block text-[9px] text-slate-400 uppercase">Mass Ratio</span>
-                                    <span className="font-mono text-xs text-cyan-400">81.3 : 1</span>
-                                </div>
-                                <div>
-                                    <span className="block text-[9px] text-slate-400 uppercase">Time Scale</span>
-                                    <span className="font-mono text-xs text-white">{speed.toFixed(1)}x</span>
-                                </div>
-                                <div className="col-span-2 pt-2 mt-2 border-t border-white/5">
-                                    <span className="block text-[9px] text-slate-400 uppercase">Status</span>
-                                    <span className="text-[10px] text-green-400 flex items-center gap-2">
-                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                        Realistic Physics Enabled
-                                    </span>
-                                </div>
-                            </div>
+            {/* --- EDUCATIONAL OVERLAY --- */}
+            <div className="absolute top-0 left-0 p-6 w-full max-w-sm pointer-events-none">
+                <div className="glass p-5 rounded-2xl border-white/10 pointer-events-auto shadow-2xl animate-slide-in">
+                    <div className="flex items-center gap-3 mb-4 border-b border-white/10 pb-4">
+                        <div className="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M12 3v3"/><path d="M12 18v3"/></svg>
+                        </div>
+                        <div>
+                            <h2 className="font-orbitron text-lg font-bold text-white">Center of Mass</h2>
+                            <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">The "Wobble" Effect</p>
                         </div>
                     </div>
 
-                    <div className="space-y-6 pt-4 border-t border-white/10">
-                        {/* Speed Slider */}
+                    <div className="space-y-4 text-sm text-slate-300 font-light leading-relaxed">
+                        <p>
+                            Planets don't just orbit stars, and moons don't just orbit planets. They both orbit their common center of mass, called the <span className="text-red-400 font-bold">Barycenter</span>.
+                        </p>
+                        
+                        <div className="bg-white/5 p-3 rounded-xl border-l-2 border-cyan-500">
+                             <h4 className="text-[10px] font-bold text-cyan-400 uppercase mb-1">Observation</h4>
+                             <p className="text-xs">
+                                {referenceFrame === 'barycentric' 
+                                 ? "In this view, the Barycenter is fixed. Notice how the Earth 'wobbles' around the red dot?"
+                                 : "In this view, we follow the Earth. It looks like the Barycenter is moving, but physically, Earth is the one wiggling!"}
+                             </p>
+                        </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="mt-6 space-y-5">
+                        {/* Reference Frame Toggle */}
                         <div className="space-y-2">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
-                                <span>Orbit Speed</span>
-                                <span className="text-cyan-400">{speed.toFixed(1)}x</span>
+                             <label className="text-[10px] font-bold text-slate-500 uppercase">Reference Frame</label>
+                             <div className="flex bg-black/40 p-1 rounded-lg">
+                                 <button 
+                                    onClick={() => setReferenceFrame('barycentric')}
+                                    className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-md transition-all ${referenceFrame === 'barycentric' ? 'bg-red-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                 >
+                                    Barycentric (Fixed)
+                                 </button>
+                                 <button 
+                                    onClick={() => setReferenceFrame('geocentric')}
+                                    className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-md transition-all ${referenceFrame === 'geocentric' ? 'bg-cyan-500 text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                 >
+                                    Geocentric (Follow)
+                                 </button>
+                             </div>
+                        </div>
+
+                         {/* Mass Slider */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-[10px] font-bold uppercase">
+                                <span className="text-slate-500">Moon Mass</span>
+                                <span className="text-white">{moonMassMultiplier}x</span>
                             </div>
-                            <input
-                                type="range"
-                                min="0"
-                                max="3"
-                                step="0.1"
-                                value={speed}
-                                onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                            <input 
+                                type="range" min="1" max="20" step="1"
+                                value={moonMassMultiplier}
+                                onChange={(e) => setMoonMassMultiplier(parseFloat(e.target.value))}
+                                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                             />
+                            <p className="text-[9px] text-slate-500 italic">
+                                Increase mass to pull the Barycenter outside of Earth.
+                            </p>
+                        </div>
+                        
+                        {/* Toggles */}
+                        <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${showLever ? 'bg-green-500' : 'bg-slate-700'}`}>
+                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${showLever ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400 group-hover:text-white transition-colors">Show Lever</span>
+                                <input type="checkbox" checked={showLever} onChange={() => setShowLever(!showLever)} className="hidden" />
+                            </label>
+
+                            <button onClick={() => setSpeed(speed === 0 ? 1 : 0)} className="text-[10px] font-bold text-slate-400 hover:text-white uppercase bg-white/5 px-3 py-1 rounded hover:bg-white/10 border border-white/5">
+                                {speed === 0 ? 'PLAY' : 'PAUSE'}
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            {/* Instruction Footer */}
-             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center pointer-events-none opacity-50">
-                <p className="text-xs text-white uppercase tracking-widest font-bold">
-                    Drag to Rotate • Scroll to Zoom
-                </p>
+
+            {/* Bottom Legend */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-6 pointer-events-none opacity-60">
+                <div className="flex items-center gap-2">
+                     <div className="w-3 h-3 rounded-full bg-cyan-400"></div>
+                     <span className="text-[10px] font-bold text-white uppercase tracking-widest">Earth Orbit</span>
+                </div>
+                <div className="flex items-center gap-2">
+                     <div className="w-3 h-3 rounded-full bg-slate-400"></div>
+                     <span className="text-[10px] font-bold text-white uppercase tracking-widest">Moon Orbit</span>
+                </div>
             </div>
+
         </div>
     );
 };

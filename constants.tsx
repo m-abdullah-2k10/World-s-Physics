@@ -3,6 +3,15 @@ import React from 'react';
 import { ModelData } from './types';
 
 export const MODELS: ModelData[] = [
+ 
+  {
+    id: 'earth-seasons',
+    title: 'Earth Seasons & Tilt',
+    description: 'Investigate how Earth\'s fixed 23.5° axial tilt creates seasons. Observe the change in direct sunlight and day length throughout the yearly orbit.',
+    category: 'Astrology',
+    thumbnail: "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23020617'%3E%3Ccircle cx='400' cy='225' r='50' fill='%23fbbf24' filter='drop-shadow(0 0 30px %23fbbf24)'/%3E%3Cellipse cx='400' cy='225' rx='300' ry='100' fill='none' stroke='%23334155' stroke-width='2' stroke-dasharray='10,10'/%3E%3Cg transform='translate(650, 180)'%3E%3Cline x1='0' y1='-40' x2='0' y2='40' stroke='%2394a3b8' stroke-width='2' transform='rotate(23.5)'/%3E%3Ccircle cx='0' cy='0' r='20' fill='%233b82f6'/%3E%3Cpath d='M -20 0 A 20 20 0 0 0 20 0' fill='black' opacity='0.5' transform='rotate(23.5)'/%3E%3C/g%3E%3Cg transform='translate(150, 270)'%3E%3Cline x1='0' y1='-40' x2='0' y2='40' stroke='%2394a3b8' stroke-width='2' transform='rotate(23.5)'/%3E%3Ccircle cx='0' cy='0' r='20' fill='%233b82f6'/%3E%3Cpath d='M -20 0 A 20 20 0 0 0 20 0' fill='black' opacity='0.5' transform='rotate(23.5)'/%3E%3C/g%3E%3Ctext x='400' y='400' fill='%2394a3b8' font-family='sans-serif' font-size='14' font-weight='bold' text-anchor='middle' letter-spacing='2'%3ESEASONS LAB%3C/text%3E%3C/svg%3E",
+    complexity: 'Medium'
+  },
   {
     id: 'solar-system',
     title: 'Solar System Explorer',
@@ -14,7 +23,7 @@ export const MODELS: ModelData[] = [
   {
     id: 'barycenter-lab',
     title: 'Gravity Lab: Barycenter',
-    description: 'Visualize the center of mass in the Earth-Moon system. Observe how the Earth "wobbles" around the common center of gravity rather than staying stationary.',
+    description: 'Master the concept of the Center of Mass. Toggle between Reference Frames to see why the Earth "wobbles" and adjust mass to move the barycenter point.',
     category: 'Physics',
     thumbnail: "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23020617'%3E%3Cdefs%3E%3Cfilter id='glow'%3E%3CfeGaussianBlur stdDeviation='2.5' result='coloredBlur'/%3E%3CfeMerge%3E%3CfeMergeNode in='coloredBlur'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3C/defs%3E%3Ccircle cx='350' cy='225' r='40' fill='%233b82f6' stroke='%231d4ed8' stroke-width='2'/%3E%3Ccircle cx='550' cy='225' r='12' fill='%2394a3b8'/%3E%3Cpath d='M 350 225 L 550 225' stroke='white' stroke-width='1' stroke-dasharray='4,4' opacity='0.3'/%3E%3Ccircle cx='375' cy='225' r='4' fill='%23ef4444' filter='url(%23glow)'/%3E%3Cpath d='M 300 225 A 75 75 0 0 1 450 225' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.2'/%3E%3Ctext x='400' y='350' fill='%2394a3b8' font-family='sans-serif' font-size='14' font-weight='bold' text-anchor='middle' letter-spacing='2'%3EORBITAL MECHANICS%3C/text%3E%3C/svg%3E",
     complexity: 'Medium'

@@ -9,3 +9,11 @@ export interface ModelData {
 }
 
 export type AppView = 'catalog' | 'active-model';
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}

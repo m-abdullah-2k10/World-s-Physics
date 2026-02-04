@@ -11,7 +11,7 @@ const InfoPanel: React.FC<InfoPanelProps> = ({ planet, onClose }) => {
   if (!planet) return null;
 
   return (
-    <div className="absolute z-20 md:top-8 md:left-8 bottom-0 left-0 right-0 md:right-auto md:w-96 p-6 md:rounded-2xl rounded-t-2xl glass border-t md:border border-white/10 text-white shadow-2xl transition-all duration-300 transform translate-y-0 animate-in fade-in slide-in-from-bottom-10">
+    <div className="absolute z-20 md:top-8 md:left-8 bottom-0 left-0 right-0 md:right-auto md:w-96 p-6 md:rounded-2xl rounded-t-2xl glass border-t md:border border-white/10 text-white shadow-2xl animate-slide-in">
       <div className="flex justify-between items-start mb-4">
         <div>
           <span className="text-xs font-bold text-cyan-400 tracking-widest uppercase">Target Lock</span>

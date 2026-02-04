@@ -1,7 +1,5 @@
 {
   "name": " AstroPhysics Visualizer",
   "description": "A high-end, responsive dashboard for interactive physics and space simulations with a modern dark space aesthetic.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "requestFramePermissions": []
 }

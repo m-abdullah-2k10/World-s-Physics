@@ -7,6 +7,7 @@ import LensSim from './LensSim';
 import SlinkySim from './SlinkySim';
 import SolarSystemSim from './SolarSystemSim';
 import BarycenterSim from './BarycenterSim';
+import EarthSeasonsSim from './EarthSeasonsSim';
 
 interface ModelViewerProps {
   model: ModelData;
@@ -38,6 +39,10 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ model, onClose }) => {
     if (model.id === 'barycenter-lab') {
       return <BarycenterSim />;
     }
+    if (model.id === 'earth-seasons') {
+      return <EarthSeasonsSim />;
+    }
+    
 
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -120,7 +125,7 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ model, onClose }) => {
             {renderSimulation()}
 
             {/* General Overlay Controls (Only show for generic simulators) */}
-            {model.id !== 'concave-mirror' && model.id !== 'thin-lens-lab' && model.id !== 'slinky-lab' && model.id !== 'solar-system' && model.id !== 'barycenter-lab' && (
+            {model.id !== 'concave-mirror' && model.id !== 'thin-lens-lab' && model.id !== 'slinky-lab' && model.id !== 'solar-system' && model.id !== 'barycenter-lab' && model.id !== 'earth-seasons' && model.id !== 'dc-motor-lab' && (
               <div className="absolute bottom-8 left-8 flex flex-col gap-4">
                   <div className="glass p-4 rounded-2xl border-white/10 w-64">
                       <span className="text-[10px] font-bold text-slate-500 tracking-widest block mb-4">PARAMETER CONFIGURATION</span>
