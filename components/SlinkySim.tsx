@@ -317,7 +317,14 @@ const SlinkySim: React.FC = () => {
                 const h = 20;
                 ctx.fillStyle = 'rgba(2, 6, 23, 0.9)'; // Darker background
                 ctx.beginPath();
-                ctx.roundRect(sx - w/2, sy - h/2, w, h, 6);
+                
+                // Fallback for roundRect
+                if (ctx.roundRect) {
+                    ctx.roundRect(sx - w/2, sy - h/2, w, h, 6);
+                } else {
+                    ctx.rect(sx - w/2, sy - h/2, w, h);
+                }
+                
                 ctx.fill();
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
